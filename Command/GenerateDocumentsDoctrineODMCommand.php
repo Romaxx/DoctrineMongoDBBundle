@@ -3,6 +3,8 @@
 
 namespace Doctrine\Bundle\MongoDBBundle\Command;
 
+use App\Kernel;
+use Symfony\Component\Console\Application;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
@@ -21,7 +23,7 @@ class GenerateDocumentsDoctrineODMCommand extends DoctrineODMCommand
         $this
             ->setName('doctrine:mongodb:generate:documents')
             ->setDescription('Generate document classes and method stubs from your mapping information.')
-            ->addArgument('bundle', InputArgument::REQUIRED, 'The bundle to initialize the document or documents in.')
+            ->addArgument('bundle', InputOption::VALUE_OPTIONAL, 'The bundle to initialize the document or documents in.')
             ->addOption('document', null, InputOption::VALUE_OPTIONAL, 'The document class to initialize (shortname without namespace).')
             ->addOption('no-backup', null, InputOption::VALUE_NONE, 'Do not backup existing entities files.')
             ->setHelp(<<<EOT
@@ -43,7 +45,7 @@ pass the <comment>--no-backup</comment> option:
 
   <info>php app/console doctrine:mongodb:generate:documents MyCustomBundle --no-backup</info>
 EOT
-        );
+            );
     }
 
     protected function execute(InputInterface $input, OutputInterface $output)
@@ -53,8 +55,18 @@ EOT
 
         $foundBundle = $this->findBundle($bundleName);
 
+        if ($foundBundle==false) //SF4 - no bundles
+        {
+            $bundleName="all the project";
+            $foundBundle=null;
+        }
+
         if ($metadatas = $this->getBundleMetadatas($foundBundle)) {
-            $output->writeln(sprintf('Generating documents for "<info>%s</info>"', $foundBundle->getName()));
+            if (!is_null($foundBundle)){
+                $output->writeln(sprintf('Generating documents for "<info>%s</info>"', $foundBundle->getName()));
+            }else{
+                $output->writeln(sprintf('Generating documents for all the App'));
+            }
             $documentGenerator = $this->getDocumentGenerator();
             $documentGenerator->setBackupExisting(!$input->getOption('no-backup'));
 
@@ -63,10 +75,13 @@ EOT
                     continue;
                 }
 
-                if (strpos($metadata->name, $foundBundle->getNamespace()) === false) {
-                    throw new \RuntimeException(
-                        "Document " . $metadata->name . " and bundle don't have a common namespace, ".
-                        "generation failed because the target directory cannot be detected.");
+                if (!is_null($foundBundle)){
+                    $namespace = $foundBundle->getNamespace();
+                    if (strpos($metadata->name, $namespace) === false) {
+                        throw new \RuntimeException(
+                            "Document " . $metadata->name . " and bundle don't have a common namespace, ".
+                            "generation failed because the target directory cannot be detected.");
+                    }
                 }
 
                 $output->writeln(sprintf('  > generating <comment>%s</comment>', $metadata->name));
@@ -77,5 +92,6 @@ EOT
                 "Bundle " . $bundleName . " does not contain any mapped documents.".
                 "Did you maybe forget to define a mapping configuration?");
         }
+
     }
 }
